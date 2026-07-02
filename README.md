@@ -1,6 +1,6 @@
 # va-ai-artifact
 
-Personal collection of Claude Code agent skills.
+Personal collection of AI artifacts — skills, agents, and more.
 
 ## Skills
 
