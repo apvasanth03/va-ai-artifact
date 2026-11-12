@@ -10,6 +10,7 @@ Visualize code logic, control flow, and diffs.
 - [Input](#input)
 - [Workflow](#workflow)
 - [Related skills](#related-skills)
+- [Credit](#credit)
 
 ## What it does
 

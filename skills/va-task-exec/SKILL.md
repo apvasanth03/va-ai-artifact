@@ -1,53 +1,63 @@
 ---
 name: va-task-exec
-description: Execute single-session tasks end-to-end.
+description: Plan and implement a single-session task end-to-end.
 disable-model-invocation: true
 ---
 
-Single-session task workflow. Enforces alignment gates while granting autonomy on internal technical decisions.
+Take a task from ambiguity to verified delivery in one session, spending tokens
+only where they reduce risk.
 
-## Inputs & Structure
+## Inputs
 
-Ensure **Workspace** (artifact root) and **Task & Context** (requirements, docs, POCs) are provided. If either is missing, ask the user before exploring.
+- **Workspace**: where artifacts (`story.md`, `hld.md`, plan) are written.
+- **Task**: what the user wants done.
+- **Context**: requirements, docs, POCs, code.
 
-```text
-<workspace>/
-├── story.md              # Requirements and checkable Acceptance Criteria (DoD)
-├── hld.md                # Architecture, visuals, contracts, and boundaries
-└── plan/
-    ├── plan.md           # Plan index, verification suite, and task table
-    ├── 1.<task_slug>.md  # Sequential task specs
-    └── ...
-```
+Ask the user if the workspace or task is missing.
 
-## Workflow
+## Judge the depth
 
-*Note: Templates are baseline references—adapt, expand, or omit sections to fit the task.*
+Exploring, writing `story.md` and the HLD are each skippable for a trivial
+task. State the skip with a one-line reason; the user can overrule. Judge each
+separately.
+Requirement grilling and the plan are always needed; a trivial task gets the
+simple layout.
 
-### 1. Story (`story.md`)
-1. Analyze context and run `grilling` until scope and a checkable **Definition of Done (DoD)** are clear.
-2. Author `story.md` using [`reference/story_template.md`](reference/story_template.md).
-3. **Gate**: Wait for user approval before moving to design.
+## Steps
 
-### 2. High-Level Design (`hld.md`)
-1. Ask user for their HLD / plan, or offer to draft one:
-   - *User provided*: Validate against context, grill on gaps, and finalize into `hld.md`.
-   - *Agent authored*: Draft `hld.md` using [`reference/hld_template.md`](reference/hld_template.md).
-2. **Gate**: Wait for user approval before moving to planning.
+1. **Explore**: Understand the current state of the code this task touches.
+   Start from the user's context and widen only as needed. Done when you can
+   say what exists, what changes and what it affects, without guessing.
+2. **Requirement**: Run the `grilling` skill, using what you explored, until
+   scope and a checkable Definition of Done (DoD) are unambiguous, whatever the
+   task size. Then write `story.md` using
+   [`story_template.md`](reference/story_template.md). **Approval required.**
+3. **HLD** (`hld.md`): Ask the user if they have a design before drafting one.
+   If so, validate it against the requirement and what you explored, and run the
+   `grilling` skill on the gaps; update it in place if it is in the workspace,
+   otherwise write it to `hld.md`. If not, draft it from the requirement and
+   exploration using [`hld_template.md`](reference/hld_template.md).
+   **Approval required.**
+4. **Plan**: Run the `va-plan-template` skill to pick the template and create
+   the plan. **Approval required.**
+5. **Implement**: Follow the plan, updating its status (checkboxes, or task
+   `Status`) as you go. Fix issues that come up on the way and note any
+   deviation from the plan.
+6. **Verify**: Run the plan's verification and fix failures until nothing is
+   red.
+7. **Self-review**: Review the diff: every DoD item met, every plan item
+   delivered, nothing unplanned. Fix findings and re-verify. The user should
+   see the work only after this pass.
+8. **Summary**: Show evidence the task is done: each DoD item delivered, the
+   verification results (what ran, what passed), and any deviations and
+   assumptions. Then wait for the user.
 
-### 3. Planning (`plan/`)
-Use `va-plan-template`:
-1. Author `plan/plan.md` (task table in `Open`/`Draft` status) → **Gate**: Wait for user approval.
-2. Author each `plan/N.<task_slug>.md` sequentially → **Gate**: User approval required per spec (mark `Approved`) before drafting the next.
+If `story.md` is skipped, confirm the DoD in chat and record it atop the plan so
+self-review has something to check against.
 
-### 4. Execution & Verification
-For each approved task in order:
-1. Implement changes and run task verifications.
-2. Update task status to `Implemented` in `plan/plan.md`.
+## Boundaries
 
-*Autonomy bounds*: Resolve internal errors and technical details autonomously; require user approval for scope changes or public contract shifts.
-
-### 5. Review & Summary
-1. Run plan-level verification from `plan/plan.md`.
-2. Review git diff against specs; fix regressions.
-3. Report: delivered tasks, verification results, and assumptions/gotchas/deviations.
+- Decide technical details yourself; ask before changing scope or public
+  contracts.
+- If you can't fix an issue, ask the user.
+- Commit or amend only with the user's approval.

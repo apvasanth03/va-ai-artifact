@@ -1,14 +1,42 @@
 # Phase 3 — Reconcile
 
-**Goal**: one final list, item by item, with the reviewer as tiebreaker — the agent's review is input, not a veto. This is round 1's reconcile; a re-review round's reconcile is Phase 5's job.
+**Goal**: one final list, decided one item at a time, with the reviewer as tiebreaker — the agent's review is input, not a veto. This is round 1's reconcile; Phase 5 reuses the queue and the walk below.
 
-- Combine `rounds/1/review/agent_review.md` and `rounds/1/review/reviewer_review.md` into one ordered set — interleaved, not reviewer-list-then-agent-list, so neither feels like an afterthought. Where an agent item and a reviewer item clearly describe the same thing, merge them into one entry.
-- Present the combined set to the reviewer as a consolidated review table:
-  | # | Severity | File:Line | Source (Agent / Reviewer / Both) | Issue Summary | Recommendation (Keep / Discard) |
-  The reviewer can review the entire set at a glance and approve/adjust in a single turn (e.g. "Discard #3, others LGTM"). If discussion is needed on specific items, address those directly.
-- Write the approved items to `rounds/1/review/final_review.json` as the sole source of truth (`{"new": [...], "unresolved": [], "resolved": []}`). Discarded items are not written.
-- `Line:` is one number (`42`), or `null` / `—` for a deletion-only finding. A finding spanning several lines or spots still gets one anchor line (its most relevant/primary one); say the rest ("whole file", other line numbers) in the Issue/Why text instead. Re-check with `scripts/diff_lines.py <workspace_path> <file>` for any item carried over from a reviewer note that didn't already cite a verified line.
-- Never add a `comment_id` field by hand — it doesn't exist until Phase 4 posts the item.
-- Once every item is decided, summarize the counts and ask whether to post.
+## Build the queue
 
-**Done when**: every item from both files has a keep/discard decision, `final_review.json` is written, and the reviewer has said yes or no to posting.
+Read `reviewer_review.md` and `agent_review.md`. Resolve anything ambiguous in a reviewer note (intent or location) with the reviewer first. Then write `rounds/1/review/review_queue.md`: one ordered table, reviewer items first, items describing the same thing merged into one row with source `Both`.
+
+| # | Source | Severity | File:Line | Title | Issue | Decision | Note |
+|---|---|---|---|---|---|---|---|
+
+- `Decision` starts `Pending` and `walk_item.py` updates it; `Note` holds a discard reason.
+- `Severity` is a proposal the reviewer confirms. `File:Line` is a real file and one `+`-side line per `scripts/diff_lines.py` (`null` for deletion-only); a reviewer-given anchor is a hint to verify.
+- `Issue` is the short problem statement, as in the agent ledger; for a reviewer note, the reviewer's intent.
+- Split a note per location, or anchor once and name the other places in the body — whichever the author reads best.
+
+## Walk
+
+Show the first `Pending` row as one card:
+
+> **#3 · major · `path/File.kt:84`** · Title · Issue · Source
+> approve · edit · discard · expand
+
+- **expand**: give the why, the evidence and the proposed fix in chat, then wait for the next decision.
+- **approve** / **edit**: write the item the moment it is decided (edit applies the reviewer's change first and adds `--edited`), then show the next card.
+- **discard**: mark the row with a few words of reason, then show the next card.
+
+The item's reader is the PR author, cold: the comment carries the reason and the fix they need to act without asking anyone. Expand the reviewer's intent; stay inside it.
+
+```bash
+python scripts/walk_item.py add <workspace_path> --section new --row 3 [--edited] <<'EOF'
+{"title": "...", "severity": "major", "file": "...", "line": 84,
+ "issue": "...", "why": "...", "suggestion": "..."}
+EOF
+python scripts/walk_item.py discard <workspace_path> --row 4 --reason "user is never null"
+```
+
+The script validates the item, creates `final_review.json` on first use and marks the row. `comment_id` comes from Phase 4.
+
+A new session, or one after a compaction, resumes at the first `Pending` row of `review_queue.md`.
+
+**Done when**: no row is `Pending`, every approved item is in `final_review.json`, and the reviewer has answered whether to post.

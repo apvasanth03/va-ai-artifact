@@ -14,7 +14,7 @@ list), and writes empty skeleton files for the walkthrough/review phases.
 
 Round N>1 computes a *delta* diff — only what changed since the previous round's
 headRefOid — and writes the lighter round-N skeleton (blind delta review +
-classification of the previous round's final_review.md). If the previous round's
+classification of the previous round's final_review.json). If the previous round's
 headRefOid is no longer reachable locally (force-push/rebase), falls back to the
 full base...HEAD diff and says so — never fails silently.
 """
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _utils import (
     gh, git, read_meta, write_meta, meta_exists, round_dir, read_round_meta,
     write_round_meta, changed_files, detect_generated, filter_files, scoped_diff,
-    base_diff_range, delta_diff_range, commit_reachable,
+    base_diff_range, delta_diff_range, commit_reachable, fetch_author_replies,
 )
 
 
@@ -50,30 +50,34 @@ def write_skeleton_file(path: str, stub: str, force: bool) -> None:
 
 REVIEWER_STUB = """# Reviewer Review
 
-Add your own findings as you go through the walkthrough — no format required
-yet, informal notes are fine. Once the review phase starts, tighten each into:
+Write your findings freely, as short as you like. The agent turns them into
+precise comments and finds the file and line. Each finding gets a `###` title;
+group them under `##` headings if useful. Anything that helps locate it is
+welcome — a file, class, method, snippet, or line — but never required.
 
-```
-#### <title> — [critical / major / minor]
-- **File**: `path/to/file`
-- **Line**: 42 or — (deletion-only)
-- **Issue**: <one line, then a code/pseudo-code snippet>
-- **Why**: <one line>
-- **Suggestion**: <code snippet showing the fix>
-```
+### <title>
+
+<your comment>
 """
+
+AGENT_LEDGER_HEADER = [
+    "| # | Severity | File:Line | Title | Issue |",
+    "|---|---|---|---|---|",
+]
 
 AGENT_STUB = """# Agent Review
 
 _Filled in once the independent review phase runs. Do not read this file
 until you're done with your own review — it's written blind to your notes,
 and reading it early would anchor your findings on it._
-"""
 
-INDEX_STUB = """# Walkthrough
+## Findings
 
-_The full walkthrough lands here: a section list, then one file per section.
-Nothing here yet._
+""" + "\n".join(AGENT_LEDGER_HEADER) + "\n"
+
+WALKTHROUGH_STUB = """# Walkthrough
+
+_Nothing here yet. Phase 1 writes the whole walkthrough into this one file._
 """
 
 def load_previous_open_items(workspace: str, round_num: int) -> list[dict]:
@@ -98,43 +102,48 @@ def load_previous_open_items(workspace: str, round_num: int) -> list[dict]:
     return []
 
 
-def generate_reviewer_review_stub(open_items: list[dict], round_num: int) -> str:
+def generate_reviewer_review_stub(open_items: list[dict], round_num: int,
+                                  replies: dict[int, str] | None = None) -> str:
+    replies = replies or {}
     lines = [f"# Reviewer Review — Round {round_num}\n"]
     if open_items:
         lines.append("## Previous Round Open Items\n")
-        lines.append("Review each item against the current code. Update Status if anything is not fixed:\n")
-        lines.append("| # | Severity | File:Line | Issue Summary | Status [Fixed / Not Fixed / Partially Fixed / Moot] | Comment (optional) |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append("Review each item against the current code and record its status [Fixed / Not Fixed / Partially Fixed / Moot]:\n")
+        lines.append("| # | Severity | File:Line | Issue Summary | Author reply | Status [Fixed / Not Fixed / Partially Fixed / Moot] | Comment (optional) |")
+        lines.append("|---|---|---|---|---|---|---|")
         for i, item in enumerate(open_items, 1):
             file_line = f"`{item.get('file', '')}:{item.get('line') or '—'}`"
             title = str(item.get("title", "")).replace("|", "\\|")
-            lines.append(f"| {i} | {item.get('severity', 'minor')} | {file_line} | {title} | Fixed | |")
+            lines.append(f"| {i} | {item.get('severity', 'minor')} | {file_line} | {title} | {replies.get(item.get('comment_id'), '')} | | |")
         lines.append("\n---\n")
     lines.append("## New Findings\n")
-    lines.append("Add any regressions or new issues spotted in this round's delta diff (free-form notes or Concern Items):\n")
-    lines.append("```\n#### <title> — [critical / major / minor]\n- **File**: `path/to/file`\n- **Line**: 42 or — (deletion-only)\n- **Issue**: <one line>\n- **Why**: <one line>\n- **Suggestion**: <snippet>\n```\n")
+    lines.append("Regressions or new issues in this round's delta diff, written freely. Each gets a `###` title; a file, class, method, snippet or line is welcome but never required.\n")
+    lines.append("### <title>\n\n<your comment>\n")
     return "\n".join(lines)
 
 
-def generate_agent_review_stub(open_items: list[dict], round_num: int) -> str:
+def generate_agent_review_stub(open_items: list[dict], round_num: int,
+                               replies: dict[int, str] | None = None) -> str:
+    replies = replies or {}
     lines = [f"# Agent Review — Round {round_num}\n"]
     if open_items:
         lines.append("## Previous Round Open Items\n")
-        lines.append("| # | Comment ID | File:Line | Issue Summary | Status | Evidence | Reply (optional) |")
-        lines.append("|---|---|---|---|---|---|---|")
+        lines.append("| # | Comment ID | File:Line | Issue Summary | Author reply | Status | Evidence | Reply (optional) |")
+        lines.append("|---|---|---|---|---|---|---|---|")
         for i, item in enumerate(open_items, 1):
             file_line = f"`{item.get('file', '')}:{item.get('line') or '—'}`"
             cid = item.get("comment_id") or "—"
             title = str(item.get("title", "")).replace("|", "\\|")
-            lines.append(f"| {i} | {cid} | {file_line} | {title} | | | |")
+            lines.append(f"| {i} | {cid} | {file_line} | {title} | {replies.get(item.get('comment_id'), '')} | | | |")
         lines.append("\n---\n")
     lines.append("## New Findings\n")
     lines.append("_Filled in during the independent delta review pass._\n")
-    return "\n".join(lines)
+    lines.extend(AGENT_LEDGER_HEADER)
+    return "\n".join(lines) + "\n"
 
 ROUND_WALKTHROUGH_STUB = """# Walkthrough — this round's delta
 
-_The walkthrough for this round's delta diff lands here: a section list, then one file per section._
+_Nothing here yet. The walkthrough of this round's delta diff goes into this one file._
 """
 
 
@@ -162,7 +171,7 @@ def setup_round_1(workspace: str, force: bool, exclude: list[str] | None = None)
         sys.exit(1)
 
     r1_dir = round_dir(workspace, 1)
-    for d in [r1_dir, os.path.join(r1_dir, "walkthrough"), os.path.join(r1_dir, "review")]:
+    for d in [r1_dir, os.path.join(r1_dir, "review")]:
         os.makedirs(d, exist_ok=True)
 
     # Owner/repo come from the local checkout, not the PR's headRepository —
@@ -221,10 +230,10 @@ def setup_round_1(workspace: str, force: bool, exclude: list[str] | None = None)
     write_round_meta(workspace, 1, {"round": 1, "headRefOid": head_ref_oid})
     print(f"headRefOid set     — {head_ref_oid[:8]}...")
 
-    write_skeleton_file(os.path.join(r1_dir, "walkthrough", "index.md"), INDEX_STUB, force)
+    write_skeleton_file(os.path.join(r1_dir, "walkthrough.md"), WALKTHROUGH_STUB, force)
     write_skeleton_file(os.path.join(r1_dir, "review", "reviewer_review.md"), REVIEWER_STUB, force)
     write_skeleton_file(os.path.join(r1_dir, "review", "agent_review.md"), AGENT_STUB, force)
-    print("Skeleton written   — walkthrough/index.md, review/reviewer_review.md, review/agent_review.md"
+    print("Skeleton written   — walkthrough.md, review/reviewer_review.md, review/agent_review.md"
           " (any file already holding content was left alone — see warnings above, if any)")
 
 
@@ -256,7 +265,7 @@ def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str
     previous_oid = prev_round_meta["headRefOid"]
 
     n_dir = round_dir(workspace, round_num)
-    for d in [n_dir, os.path.join(n_dir, "walkthrough"), os.path.join(n_dir, "review")]:
+    for d in [n_dir, os.path.join(n_dir, "review")]:
         os.makedirs(d, exist_ok=True)
 
     base = meta["baseRefName"]
@@ -318,13 +327,18 @@ def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str
     write_meta(workspace, meta)
 
     open_items = load_previous_open_items(workspace, round_num)
-    reviewer_stub = generate_reviewer_review_stub(open_items, round_num)
-    agent_stub = generate_agent_review_stub(open_items, round_num)
+    # Read-only snapshot of the author's replies, shown in the review tables only.
+    replies = fetch_author_replies(
+        meta["owner"], meta["repo"], meta["pr_number"],
+        [i["comment_id"] for i in open_items if i.get("comment_id")],
+    )
+    reviewer_stub = generate_reviewer_review_stub(open_items, round_num, replies)
+    agent_stub = generate_agent_review_stub(open_items, round_num, replies)
 
-    write_skeleton_file(os.path.join(n_dir, "walkthrough", "index.md"), ROUND_WALKTHROUGH_STUB, force)
+    write_skeleton_file(os.path.join(n_dir, "walkthrough.md"), ROUND_WALKTHROUGH_STUB, force)
     write_skeleton_file(os.path.join(n_dir, "review", "reviewer_review.md"), reviewer_stub, force)
     write_skeleton_file(os.path.join(n_dir, "review", "agent_review.md"), agent_stub, force)
-    print(f"Skeleton written   — round {round_num}: walkthrough/index.md, "
+    print(f"Skeleton written   — round {round_num}: walkthrough.md, "
           f"review/{{reviewer_review.md, agent_review.md}}")
 
 

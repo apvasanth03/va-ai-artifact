@@ -148,6 +148,46 @@ def reply_to_comment(owner: str, repo: str, pr_number: int, comment_id: int, bod
     return {"comment_id": resp["id"], "url": resp["html_url"]}
 
 
+def fetch_author_replies(owner: str, repo: str, pr_number: int, comment_ids: list[int],
+                         max_replies: int = 3, max_chars: int = 300) -> dict[int, str]:
+    """Read-only. For each root comment id, return a table-cell string with the latest
+    replies from anyone other than the authenticated reviewer (`gh api user`).
+    Missing/failed fetch -> {} (callers leave the column empty). Never written to
+    final_review.json — GitHub stays the source of truth."""
+    if not comment_ids:
+        return {}
+    try:
+        me = subprocess.run(["gh", "api", "user", "--jq", ".login"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+        res = subprocess.run(
+            ["gh", "api", "--paginate", "--slurp",
+             f"repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100"],
+            capture_output=True, text=True, check=True)
+        pages = json.loads(res.stdout)
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
+        detail = getattr(e, "stderr", "") or str(e)
+        print(f"[WARN] could not fetch author replies: {detail.strip()}", file=sys.stderr)
+        return {}
+    comments = [c for page in pages for c in (page if isinstance(page, list) else [page])]
+    wanted = set(comment_ids)
+    out: dict[int, str] = {}
+    for cid in wanted:
+        replies = [c for c in comments
+                   if c.get("in_reply_to_id") == cid
+                   and (c.get("user") or {}).get("login") not in (me, None)]
+        replies.sort(key=lambda c: c.get("created_at", ""))
+        cells = []
+        for c in replies[-max_replies:]:
+            body = " ".join((c.get("body") or "").split())
+            if len(body) > max_chars:
+                body = body[:max_chars].rstrip() + "…"
+            body = body.replace("|", "\\|")
+            cells.append(f"@{c['user']['login']}: {body} ([thread]({c.get('html_url', '')}))")
+        if cells:
+            out[cid] = "<br>".join(cells)
+    return out
+
+
 def check_head_current(owner: str, repo: str, pr_number: int, expected_head: str) -> str | None:
     """Returns a warning string if the PR's head has moved past `expected_head`
     since round setup ran, else None. New commits on the branch after setup mean
