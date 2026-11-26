@@ -1,20 +1,22 @@
 # Phase 1 — Walkthrough
 
-**Goal**: the reviewer scans the whole PR top to bottom in one file. Judgment stays in Phase 2. This is round 1's full walkthrough; a re-review round's delta version is `references/phase-5-rereview.md`'s job.
+**Goal:** the reviewer scans the whole PR top to bottom in one file. Judgment stays in Phase 2. This is round 1's full walkthrough; a re-review round's delta version is in `references/phase-5-rereview.md`.
 
-## Sections
+## Steps
 
-Read `rounds/1/diff.patch` and group it by concern, not by file or commit. A feature, its call site and its test are one section; two unrelated one-liners are two sections. Order sections so each builds on the one before. Tests get one closing section.
-
-Check every count, name and path against the diff before writing it down.
-
-## Section gate
-
-Before writing, propose the sections in chat: a short numbered list, one line per section saying what it covers. The reviewer steers in their own words (a different grouping, more depth on a section) and you revise the list until they approve. Write the walkthrough only from the approved sections.
+1. **Group the diff into sections.** Read `rounds/1/diff.patch` and group it by concern, not by file or commit.
+   - A feature, its call site and its test are one section; two unrelated one-liners are two sections.
+   - Order sections so each builds on the one before. Tests get one closing section.
+2. **Section gate.** Propose the sections in chat as a short numbered list, one line per section saying what it covers. The reviewer steers in their own words (a different grouping, more depth on a section); revise the list until they approve.
+3. **Write the walkthrough** from the approved sections only, using the layout and template below. Check every count, name and path against the diff before writing it down.
+4. **Hand off** with the message below.
 
 ## Layout
 
-One file, `rounds/1/walkthrough.md`. When one file stops being scannable (roughly past six sections or 1,500 non-test diff lines; your judgment), keep `walkthrough.md` as the overview (Big picture, group list with links) and put each group's sections in `rounds/1/walkthrough/<group>.md`. A group is a few sections that share a package or concern, not a file per section.
+- One file: `rounds/1/walkthrough.md`.
+- When one file stops being scannable (roughly past six sections or 1,500 non-test diff lines; your judgment):
+  - `walkthrough.md` becomes the overview: Big picture and the group list with links.
+  - Each group's sections go in `rounds/1/walkthrough/<group>.md`. A group is a few sections that share a package or concern, not a file per section.
 
 ## Template
 
@@ -47,4 +49,4 @@ Tell the reviewer:
 
 When the reviewer says a section is wrong or asks a question, fix or answer it from the diff.
 
-**Done when**: the reviewer approved the sections, every section has its tree and view, the file's counts and names match the diff, the reviewer has been notified, and they confirm you should start your review.
+**Done when:** the reviewer approved the sections, every section has its tree and view, the file's counts and names match the diff, the reviewer has been notified, and they confirm you should start your review.

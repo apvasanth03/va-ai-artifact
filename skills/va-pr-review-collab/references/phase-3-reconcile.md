@@ -1,12 +1,10 @@
 # Phase 3 — Reconcile
 
-**Goal**: one final list, decided in three steps by weight, with the reviewer as tiebreaker — the agent's review is input, not a veto. This is round 1's reconcile; Phase 5 reuses the queue and the decision steps below.
+**Goal:** one final list, decided in two steps by source, with the reviewer as tiebreaker — the agent's review is input, not a veto. This is round 1's reconcile; Phase 5 reuses the queue and the decision steps below.
 
 ## Build the queue
 
-Read `reviewer_review.md` and `agent_review.md`. Resolve anything ambiguous in a reviewer note (intent or location) with the reviewer first. Then write two files:
-
-`rounds/1/review/review_queue.md`: one ordered table, reviewer items first, items describing the same thing merged into one row with source `Both`.
+Read `reviewer_review.md` and `agent_review.md`. Resolve anything ambiguous in a reviewer note (intent or location) with the reviewer first. Then write `rounds/1/review/review_queue.md`: one ordered table, reviewer items first, items describing the same thing merged into one row with source `Both`, agent rows ordered critical → major → minor.
 
 | # | Source | Severity | File:Line | Title | Issue | Fix | Decision | Note |
 |---|---|---|---|---|---|---|---|---|
@@ -16,52 +14,47 @@ Read `reviewer_review.md` and `agent_review.md`. Resolve anything ambiguous in a
 - `Issue` and `Fix` are one short line each: the problem, and the fix in words. For a reviewer note, `Issue` is the reviewer's intent.
 - Split a note per location, or anchor once and name the other places in the body — whichever the author reads best.
 
-`rounds/1/review/queue_items.json`: the complete item (below) for every row, keyed by row number, except agent-only minor rows. The text the reviewer approves is the text that posts.
-
-The complete item has no ambiguity left: its reader is the PR author, cold, and acts without asking anyone. It carries the row's finding, severity and fix direction, and adds the detail: the symbols and places involved in `issue` and `why`, and in `suggestion` the fix with a code snippet and every other place to change.
-
-```json
-{"3": {"title": "...", "severity": "major", "file": "...", "line": 84,
-       "issue": "...", "why": "...", "suggestion": "..."}}
-```
+The queue is the only file written before the reviewer decides.
 
 ## Decide
 
-Each step ends when its rows have a decision and the reviewer's reply is recorded.
+Each step shows one **decision table**, its cells taken from the queue rows:
 
-1. **Reviewer rows** (source `Reviewer` or `Both`): show these rows of the table, with `Fix`, and name `queue_items.json` as the full text that posts. The reviewer replies with exceptions ("approve all except 4, 7"). Record the rest in one call.
-2. **Agent-only critical and major rows**: one card each.
+| # | Severity | Title | Issue | Fix |
+|---|---|---|---|---|
 
-   > **#12 · major · `path/File.dart:47`** · Agent
-   > **Why:** …
-   > **Suggestion:** …
-   > **My take:** one sentence, then `agree`, `agree, with a change` or `disagree`
-   > approve · edit · discard · expand
+1. **Reviewer rows** (source `Reviewer` or `Both`), **approve-by-exception**: the reviewer replies with exceptions ("approve all except 3"); every row not named is approved.
+2. **Agent-only rows**, all severities, as a **keep-list**: the reviewer names the rows to keep; every row not named is discarded.
 
-3. **Agent-only minor rows**: one list, one line per row stating its impact. The reviewer names the rows to keep; every other row is discarded. Add the complete item of each kept row to `queue_items.json`, then record them with `--from-queue`.
+Within either reply, the reviewer can name a row with:
 
-Reviewer answers on a card or an exception:
+- **edit**: a field or the severity and the change; the item is written with it applied, and recorded with `--edited`.
+- **discard**: a few words of reason.
+- **expand**: write that row's full item in chat with its evidence, then wait for that row's decision.
 
-- **expand**: give the evidence and the full text that would be written, then wait for the next decision.
-- **approve**: record the row.
-- **edit**: the reviewer names a field or the severity and the change; apply it to the item, record it with `--edited`.
-- **discard**: record the row with a few words of reason.
+A step is done when every row in it is out of `Pending`: each approved, kept or edited row has its item in `final_review.json`, and each other row is discarded.
 
-## Record
+## Write the items
 
-`walk_item.py` validates each item, creates `final_review.json` on first use and marks the rows. `comment_id` comes from Phase 4.
+Write the items in the same turn as the reviewer's reply. `walk_item.py` marks a row only when its item is written, so a session resumed after a compaction restarts at the first `Pending` row, and a reply whose items were never written is asked again.
+
+Each item is complete, with no ambiguity left: its reader is the PR author, cold, and acts without asking anyone. It keeps the queue row's finding, severity and fix direction, and adds the detail — every symbol and place involved in `issue` and `why`, and in `suggestion` the fix with a code snippet and every other place to change. Fields are the `new` item in `SKILL.md`'s Review Data.
 
 ```bash
-# approved rows: items come from queue_items.json
-python scripts/walk_item.py add <workspace_path> --section new --rows 1,2,3 --from-queue
-# a changed or newly written item: JSON on stdin
-python scripts/walk_item.py add <workspace_path> --section new --row 3 [--edited] <<'EOF'
-{"title": "...", "severity": "major", "file": "...", "line": 84,
- "issue": "...", "why": "...", "suggestion": "..."}
+# items for the step, keyed by queue row; --edited lists the edited rows (or alone: all of them)
+python scripts/walk_item.py add <workspace_path> --section new [--edited 3,5] <<'EOF'
+{"1": {"title": "...", "severity": "major", "file": "...", "line": 84,
+       "issue": "...", "why": "...", "suggestion": "..."},
+ "3": {...}}
 EOF
 python scripts/walk_item.py discard <workspace_path> --rows 4,5 --reason "user is never null"
+# a later change to a written item: short fields with --set, long text on stdin with --field
+python scripts/walk_item.py edit <workspace_path> --row 3 --set severity=minor
+python scripts/walk_item.py edit <workspace_path> --row 3 --field suggestion <<'EOF'
+...
+EOF
 ```
 
-A new session, or one after a compaction, resumes at the first `Pending` row of `review_queue.md`.
+`comment_id` comes from Phase 4.
 
-**Done when**: no row is `Pending`, every approved item is in `final_review.json`, and the reviewer has answered whether to post.
+**Done when:** no row of `review_queue.md` is `Pending`, every approved, kept or edited row has its item in `final_review.json`, and the reviewer has answered whether to post.

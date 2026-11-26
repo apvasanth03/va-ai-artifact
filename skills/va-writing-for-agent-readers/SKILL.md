@@ -25,5 +25,9 @@ the principles below differ, these win.
   pointer.
 - **Output template**: when a human reads the result, the document gives the
   exact shape (headings, tables, fields), not just "write a report".
+- **Glanceable**: a human maintains the document, so its shape shows what it
+  does at a glance: a heading per concern, bullets or tables over dense
+  paragraphs, a diagram where flow matters. Structure replaces prose; it
+  does not add to it.
 
 A document is done when every principle has been applied to it.
