@@ -8,6 +8,7 @@ Triggers when new commits land addressing a previous round's findings. Round N o
 
 - Run `python scripts/setup.py <workspace_path> --round N` where `N` = current round + 1.
   - Computes the delta diff (previous round's `headRefOid...HEAD`) and saves `rounds/N/diff.patch`.
+  - **Base merges:** if the author merged the base branch since the previous round, that merge's changes are excluded, so the delta holds only the author's own work. Conflicted files take the base side and show the author's whole change against the base; say so in the walkthrough. `round.json` records `base_merge_oid` and `base_conflict_files`. Pass `--include-base-merge` for the raw delta.
   - Writes `rounds/N/round.json` and updates `meta.json`'s `current_round`.
   - Reads open items from `rounds/<N-1>/review/final_review.json`.
   - Automatically pre-populates:
@@ -49,10 +50,10 @@ The agent reviews independently without reading the reviewer's file first:
 ## Reconcile
 
 Once the reviewer signals they are done:
-1. **Previous items, in one pass.** Show a single status table (item, agreed status, one-line evidence). The reviewer is the tiebreaker; a status they want to discuss moves to the walk. On their sign-off, write each item with `walk_item.py add --section resolved|unresolved` (no `--row`). Statuses:
+1. **Previous items, in one pass.** Show a single status table (item, agreed status, one-line evidence). The reviewer is the tiebreaker; a status they want to discuss is discussed before sign-off. On their sign-off, write each item with `walk_item.py add --section resolved|unresolved` (no `--row`). Statuses:
    - `resolved`: Fixed or Moot — replied to and resolved on GitHub by `resolve_threads.py`.
    - `unresolved`: Not Fixed or Partially Fixed — updated on GitHub and left open by `resolve_threads.py`.
-2. **New findings, one at a time.** Build `rounds/N/review/review_queue.md` and walk it, resuming included, per `references/phase-3-reconcile.md`. Approved items land in `new`, to be posted by `post_all.py`.
+2. **New findings, in three steps.** Build `rounds/N/review/review_queue.md` and `queue_items.json`, and decide the rows, resuming included, per `references/phase-3-reconcile.md`. Approved items land in `new`, to be posted by `post_all.py`.
 
 ## Resolve & Post
 

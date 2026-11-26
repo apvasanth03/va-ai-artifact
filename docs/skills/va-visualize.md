@@ -47,7 +47,7 @@ Pick the smallest structural view that fits the point — use one, a few, rarely
 
 ## Related skills
 
-Used by [va-plan-template](va-plan-template.md), [va-task-exec](va-task-exec.md), and [va-pr-review-collab](va-pr-review-collab.md) for diagrams and structural views.
+Used by [va-sdlc-template](va-sdlc-template.md), [va-task-exec](va-task-exec.md), and [va-pr-review-collab](va-pr-review-collab.md) for diagrams and structural views.
 
 ## Credit
 

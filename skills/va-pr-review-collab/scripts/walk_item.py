@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Record one reviewer decision from the walk.
+"""Record reviewer decisions from the reconcile step.
 
-`add` validates an approved item, saves it into the round's final_review.json
-(creating the file when missing) and marks its row in review_queue.md.
-`discard` marks the row only; nothing reaches final_review.json.
+`add` validates approved items, saves them into the round's final_review.json
+(creating the file when missing) and marks their rows in review_queue.md.
+`discard` marks rows only; nothing reaches final_review.json.
 
 Usage:
   python walk_item.py add <workspace> --section new|unresolved|resolved
                           [--row N] [--edited] [--round R]  < item.json
-  python walk_item.py discard <workspace> --row N --reason "<few words>" [--round R]
+  python walk_item.py add <workspace> --section new --rows 1,2,3 --from-queue [--round R]
+  python walk_item.py discard <workspace> --row N | --rows 4,5 --reason "<few words>" [--round R]
 
-The item JSON arrives on stdin, one object using the SKILL.md item fields.
+Without --from-queue, the item JSON arrives on stdin: one object using the
+SKILL.md item fields. With --from-queue, each row's item is read from
+review/queue_items.json (keyed by row number); every item is validated before
+anything is written.
 `new` items take no comment_id or url; post_all.py writes those back.
 A repeat `add` replaces the earlier item: `new` matches on file + title,
 `unresolved` and `resolved` match on comment_id.
@@ -121,13 +125,51 @@ def mark_row(queue_path: str, row: int, decision: str, note: str) -> None:
         f.write("\n".join(lines))
 
 
+def parse_rows(args) -> list[int]:
+    rows = [args.row] if args.row is not None else []
+    if args.rows:
+        try:
+            rows += [int(r) for r in args.rows.split(",") if r.strip()]
+        except ValueError:
+            fail("--rows takes row numbers separated by commas, e.g. 1,2,3")
+    if len(set(rows)) != len(rows):
+        fail("a row number is listed twice")
+    return rows
+
+
+def load_queue_items(path: str) -> dict:
+    if not os.path.exists(path):
+        fail(f"{path} does not exist")
+    with open(path) as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            fail(f"{path} is invalid JSON: {e}")
+    if not isinstance(data, dict):
+        fail(f"{path} must be one object keyed by row number")
+    return data
+
+
+def upsert(data: dict, section: str, item: dict) -> str:
+    items = data[section]
+    for i, existing in enumerate(items):
+        if same_item(section, existing, item):
+            items[i] = item
+            return "Replaced"
+    items.append(item)
+    return "Added"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("action", choices=["add", "discard"])
     ap.add_argument("workspace")
     ap.add_argument("--section", choices=list(SECTIONS))
     ap.add_argument("--row", type=int, help="row # in review_queue.md")
-    ap.add_argument("--edited", action="store_true", help="mark the row Edited instead of Approved")
+    ap.add_argument("--rows", help="several row #s, comma-separated (1,2,3)")
+    ap.add_argument("--from-queue", action="store_true",
+                    help="add: read each row's item from review/queue_items.json instead of stdin")
+    ap.add_argument("--edited", action="store_true", help="mark the rows Edited instead of Approved")
     ap.add_argument("--reason", default="", help="discard: a few words on why")
     ap.add_argument("--round", type=int, help="defaults to the workspace's current round")
     args = ap.parse_args()
@@ -137,53 +179,62 @@ def main():
     rev_dir = os.path.join(rdir, "review")
     json_path = os.path.join(rev_dir, "final_review.json")
     queue_path = os.path.join(rev_dir, "review_queue.md")
+    queue_items_path = os.path.join(rev_dir, "queue_items.json")
 
-    if args.row is not None:
+    rows = parse_rows(args)
+    if rows:
         if not os.path.exists(queue_path):
             fail(f"{queue_path} does not exist")
-        decision = row_decision(queue_path, args.row)
-        if decision is None:
-            fail(f"row {args.row} not found in {queue_path}")
-        if args.action == "discard" and decision in ("Approved", "Edited"):
-            fail(f"row {args.row} is {decision} and its item is already in final_review.json; "
-                 "remove that item from the file first, then discard")
+        for row in rows:
+            decision = row_decision(queue_path, row)
+            if decision is None:
+                fail(f"row {row} not found in {queue_path}")
+            if args.action == "discard" and decision in ("Approved", "Edited"):
+                fail(f"row {row} is {decision} and its item is already in final_review.json; "
+                     "remove that item from the file first, then discard")
 
     if args.action == "discard":
-        if args.row is None:
-            fail("discard needs --row")
-        mark_row(queue_path, args.row, "Discarded", args.reason)
-        print(f"Row {args.row} marked Discarded")
+        if not rows:
+            fail("discard needs --row or --rows")
+        for row in rows:
+            mark_row(queue_path, row, "Discarded", args.reason)
+        print(f"Rows {', '.join(map(str, rows))} marked Discarded")
         return
 
     if not args.section:
         fail("add needs --section")
-    try:
-        item = json.load(sys.stdin)
-    except json.JSONDecodeError as e:
-        fail(f"item JSON on stdin is invalid: {e}")
-    if not isinstance(item, dict):
-        fail("item JSON must be one object")
-    validate(args.section, item, os.path.join(rdir, "diff.patch"))
+    if args.from_queue:
+        if not rows:
+            fail("--from-queue needs --row or --rows")
+        queued = load_queue_items(queue_items_path)
+        missing = [r for r in rows if str(r) not in queued]
+        if missing:
+            fail(f"no item in {queue_items_path} for row(s) {', '.join(map(str, missing))}")
+        new_items = [queued[str(r)] for r in rows]
+    else:
+        if len(rows) > 1:
+            fail("several rows need --from-queue; stdin carries one item")
+        try:
+            new_items = [json.load(sys.stdin)]
+        except json.JSONDecodeError as e:
+            fail(f"item JSON on stdin is invalid: {e}")
+    for item in new_items:
+        if not isinstance(item, dict):
+            fail("each item must be one JSON object")
+        validate(args.section, item, os.path.join(rdir, "diff.patch"))
 
     data = dict(EMPTY_REVIEW)
     if os.path.exists(json_path):
         with open(json_path) as f:
             data = {**EMPTY_REVIEW, **json.load(f)}
-    items = data[args.section]
-    for i, existing in enumerate(items):
-        if same_item(args.section, existing, item):
-            items[i] = item
-            verb = "Replaced"
-            break
-    else:
-        items.append(item)
-        verb = "Added"
+    verbs = [upsert(data, args.section, item) for item in new_items]
     save_json(json_path, data)
 
-    if args.row is not None:
-        mark_row(queue_path, args.row, "Edited" if args.edited else "Approved", "")
-    print(f"{verb} in {args.section} — {item['title']} "
-          f"(new={len(data['new'])}, unresolved={len(data['unresolved'])}, resolved={len(data['resolved'])})")
+    for row in rows:
+        mark_row(queue_path, row, "Edited" if args.edited else "Approved", "")
+    for verb, item in zip(verbs, new_items):
+        print(f"{verb} in {args.section} — {item['title']}")
+    print(f"(new={len(data['new'])}, unresolved={len(data['unresolved'])}, resolved={len(data['resolved'])})")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ No concern-file parsing lives here — the agent reads/writes the workspace's
 markdown itself and calls scripts with plain values. These helpers only talk
 to gh, git, meta.json, and round.json.
 """
-import fnmatch, json, os, subprocess, sys
+import fnmatch, json, os, shutil, subprocess, sys
 
 
 # ── Meta (stable PR identity, top-level) ─────────────────────────────────────
@@ -80,8 +80,9 @@ def gh_graphql(query: str, **variables) -> dict:
     return resp["data"]
 
 
-def git(*args) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], capture_output=True, text=True)
+def git(*args, env: dict | None = None) -> subprocess.CompletedProcess:
+    full_env = {**os.environ, **env} if env else None
+    return subprocess.run(["git", *args], capture_output=True, text=True, env=full_env)
 
 
 def commit_reachable(oid: str) -> bool:
@@ -241,10 +242,74 @@ def base_diff_range(base: str) -> str:
     return f"origin/{base}...HEAD"
 
 
-def delta_diff_range(previous_oid: str) -> str:
-    """Delta range for round N>1: a bare commit oid needs no remote prefix —
-    `origin/` only makes sense in front of a branch name, not a commit hash."""
-    return f"{previous_oid}...HEAD"
+def delta_diff_range(previous_oid: str, base: str | None = None,
+                     include_base_merge: bool = False) -> tuple[str, dict]:
+    """Delta range for round N>1, returned as (range, info).
+
+    A bare commit oid needs no remote prefix. When the author merged the base
+    branch since `previous_oid`, a plain `previous_oid...HEAD` also shows the
+    base branch's own changes. Unless `include_base_merge`, build a synthetic
+    commit (previous head + the base content HEAD contains) and diff against it,
+    so only the author's own changes remain. Conflicted paths take the base
+    side. Any failure falls back to the plain range."""
+    plain = (f"{previous_oid}...HEAD", {})
+    if include_base_merge or not base:
+        return plain
+    try:
+        return _delta_without_base_merge(previous_oid, base) or plain
+    except Exception as e:  # never block setup on this optimization
+        print(f"WARNING: could not exclude the base merge ({e}); using the plain delta.",
+              file=sys.stderr)
+        return plain
+
+
+def _delta_without_base_merge(previous_oid: str, base: str) -> tuple[str, dict] | None:
+    import tempfile
+    m = git("merge-base", f"origin/{base}", "HEAD")
+    if m.returncode != 0:
+        return None
+    base_oid = m.stdout.strip()
+    if git("merge-base", "--is-ancestor", base_oid, previous_oid).returncode == 0:
+        return None  # previous head already had this base content: nothing to exclude
+    mt = git("merge-tree", "--write-tree", "--name-only", "-z", previous_oid, base_oid)
+    if mt.returncode not in (0, 1):
+        raise RuntimeError(mt.stderr.strip() or "git merge-tree failed")
+    # -z output: <tree> NUL, conflicted paths each NUL-terminated, NUL, messages
+    fields = mt.stdout.split("\0")
+    tree = fields[0].strip()
+    conflicts = []
+    for path in fields[1:]:
+        if not path:
+            break
+        conflicts.append(path)
+    idx_dir = tempfile.mkdtemp(prefix="review_idx_")
+    idx = os.path.join(idx_dir, "index")
+    env = {"GIT_INDEX_FILE": idx,
+           "GIT_AUTHOR_NAME": "review", "GIT_AUTHOR_EMAIL": "review@localhost",
+           "GIT_COMMITTER_NAME": "review", "GIT_COMMITTER_EMAIL": "review@localhost"}
+    try:
+        if git("read-tree", tree, env=env).returncode != 0:
+            raise RuntimeError("read-tree failed")
+        for path in conflicts:
+            blob = git("rev-parse", f"{base_oid}:{path}")
+            if blob.returncode == 0:
+                mode = git("ls-tree", base_oid, "--", path).stdout.split()[0]
+                r = git("update-index", "--add", "--cacheinfo",
+                        f"{mode},{blob.stdout.strip()},{path}", env=env)
+            else:
+                r = git("update-index", "--force-remove", path, env=env)
+            if r.returncode != 0:
+                raise RuntimeError(f"could not set base side for {path}: {r.stderr.strip()}")
+        wt = git("write-tree", env=env)
+        if wt.returncode != 0:
+            raise RuntimeError("write-tree failed")
+        ct = git("commit-tree", wt.stdout.strip(), "-p", previous_oid, "-m", "review base", env=env)
+        if ct.returncode != 0:
+            raise RuntimeError(ct.stderr.strip() or "commit-tree failed")
+    finally:
+        shutil.rmtree(idx_dir, ignore_errors=True)
+    return (f"{ct.stdout.strip()}..HEAD",
+            {"base_merge_oid": base_oid, "base_conflict_files": conflicts})
 
 
 def changed_files(range_: str) -> list[str]:

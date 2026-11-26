@@ -6,7 +6,7 @@
 
 ## Overview
 
-[Optional: one visual of the whole change at a glance.]
+[Optional: one `va-visualize` view of the whole change.]
 
 ## Scope
 
@@ -40,9 +40,21 @@ Document public APIs; comment private code only where logic is non-obvious. Keep
 ## Steps
 
 - [ ] **[Step title]**
-  - **Changes**: [Visuals per `va-visualize`.]
+  ```[lang]
+  [Skeleton of the new and changed classes for this step.]
+  ```
 - [ ] **[Step title]**
-  - **Changes**: [...]
+  ```[lang]
+  [...]
+  ```
+
+## Test cases
+
+[Optional: when the plan adds tests.]
+
+| Test file | Case | Given | Expect |
+|---|---|---|---|
+| [file] | [case] | [input] | [result, or `uncovered: reason`] |
 
 ## Verification
 

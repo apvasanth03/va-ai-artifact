@@ -2,7 +2,7 @@
 
 **Goal**: get the reviewer's approved list onto the PR, nothing more.
 
-- Only runs after the reviewer's explicit "yes" — never post on your own initiative, even if the walk is obviously finished. Ask with counts only (items to post, discarded); the reviewer approved each item during the walk.
+- Only runs after the reviewer's explicit "yes" — never post on your own initiative, even if the reconcile is obviously finished. Ask with counts only (items to post, discarded); the reviewer approved each item in the reconcile steps.
 - Post everything in one call — the script parses `rounds/<round>/review/final_review.json` directly and builds each comment body from Issue/Why/Suggestion:
   ```bash
   python scripts/post_all.py <workspace_path>

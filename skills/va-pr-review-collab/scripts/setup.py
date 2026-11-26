@@ -13,7 +13,8 @@ generated files via .gitattributes linguist-generated, or a fallback pattern
 list), and writes empty skeleton files for the walkthrough/review phases.
 
 Round N>1 computes a *delta* diff — only what changed since the previous round's
-headRefOid — and writes the lighter round-N skeleton (blind delta review +
+headRefOid, minus changes that only came from merging the base branch (see
+`--include-base-merge`) — and writes the lighter round-N skeleton (blind delta review +
 classification of the previous round's final_review.json). If the previous round's
 headRefOid is no longer reachable locally (force-push/rebase), falls back to the
 full base...HEAD diff and says so — never fails silently.
@@ -237,7 +238,8 @@ def setup_round_1(workspace: str, force: bool, exclude: list[str] | None = None)
           " (any file already holding content was left alone — see warnings above, if any)")
 
 
-def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str] | None = None) -> None:
+def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str] | None = None,
+                  include_base_merge: bool = False) -> None:
     if not meta_exists(workspace):
         print(f"{workspace}/meta.json not found — run setup.py without --round first.",
               file=sys.stderr)
@@ -275,6 +277,7 @@ def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str
         sys.exit(1)
 
     fallback_to_base = not commit_reachable(previous_oid)
+    base_info: dict = {}
     if fallback_to_base:
         print(
             f"WARNING: round {round_num - 1}'s headRefOid ({previous_oid[:8]}) is no "
@@ -286,7 +289,11 @@ def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str
         )
         diff_range = base_diff_range(base)
     else:
-        diff_range = delta_diff_range(previous_oid)
+        diff_range, base_info = delta_diff_range(previous_oid, base, include_base_merge)
+        if base_info:
+            print(f"Base merge         — {base_info['base_merge_oid'][:8]} excluded from the delta; "
+                  f"{len(base_info['base_conflict_files'])} conflicted file(s) take the base side "
+                  f"(they show the author's whole change against the base)")
 
     if exclude is not None:
         meta["exclude"] = exclude
@@ -320,6 +327,7 @@ def setup_round_n(workspace: str, round_num: int, force: bool, exclude: list[str
         "headRefOid": head_ref_oid,
         "previous_round_headRefOid": previous_oid,
         "delta_fallback_to_base": fallback_to_base,
+        **base_info,
     })
     print(f"headRefOid set     — {head_ref_oid[:8]}...")
 
@@ -351,12 +359,14 @@ def main() -> None:
                      help="overwrite skeleton files even if they already have content")
     ap.add_argument("--exclude", nargs="*", default=None,
                      help="globs to exclude from the diff (e.g. 'test/*' '*_test.dart')")
+    ap.add_argument("--include-base-merge", action="store_true",
+                     help="round N>1: keep base-branch merge changes in the delta diff")
     args = ap.parse_args()
 
     if args.round is None:
         setup_round_1(args.workspace, args.force, args.exclude)
     else:
-        setup_round_n(args.workspace, args.round, args.force, args.exclude)
+        setup_round_n(args.workspace, args.round, args.force, args.exclude, args.include_base_merge)
 
 
 if __name__ == "__main__":

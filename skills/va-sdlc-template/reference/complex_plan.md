@@ -9,7 +9,7 @@
 
 ## Overview
 
-[Optional: one visual of the whole change at a glance.]
+[Optional: one `va-visualize` view of the whole change.]
 
 ## Scope
 
@@ -68,9 +68,25 @@ Document public APIs; comment private code only where logic is non-obvious. Keep
 └── [file_c]            (deleted)
 ```
 
-## Changes
+## Flow
 
-[Visuals per `va-visualize`.]
+[Optional: one `va-visualize` view when the change spans classes.]
+
+## Classes and public API
+
+### `[ClassName]` ([new | modified])
+
+```[lang]
+[Skeleton]
+```
+
+## Test cases
+
+[Optional: when the task adds tests.]
+
+| Test file | Case | Given | Expect |
+|---|---|---|---|
+| [file] | [case] | [input] | [result, or `uncovered: reason`] |
 
 ## Not in this task
 

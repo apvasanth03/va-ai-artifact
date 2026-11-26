@@ -1,16 +1,18 @@
 # {NN}: [Ticket title]
 
-**Type**: [build or poc]
+**Type**: [build, poc or fix]
 **Blocked by**: [ticket ids, or none]
 
-## What to build
-[The end-to-end outcome.]
+## Why
+[What this ticket serves: story ACs, or an HLD contract.]
+Serves: AC-2, AC-3
+Serves: `hld.md` › Contracts › <name>
 
-## Acceptance criteria
-- [ ] [Checkable condition]
+## What
+[The outcome this ticket delivers.]
 
-## Verification
-[How to prove this ticket works.]
+## DoD
+- [ ] [Pass/fail condition]: [how it is verified]
 
 ## Context
-[`spec.md` sections and other pointers to read first.]
+[`story.md` and `hld.md` sections, and other pointers to read first.]

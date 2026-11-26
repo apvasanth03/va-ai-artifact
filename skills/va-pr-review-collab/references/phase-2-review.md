@@ -6,6 +6,7 @@
   1. **Functional correctness** — does the code fulfill its intended behavior without breaking existing functionality, contracts, or regressions?
   2. **Code quality** — readability, maintainability, architectural fit, idiomatic style, and unnecessary complexity.
   3. **Edge cases & failure modes** — null/empty states, boundaries, error handling, race conditions, and resource leaks.
+- Report a finding only with a named failure (what breaks, for whom) or the exact rule it breaks. Style nits and formatting with no failure share one `Nits` row. Each row the reviewer must decide costs them time.
 - Write one **ledger** row per finding into `rounds/1/review/agent_review.md` (the table the stub provides): `#`, `Severity`, `File:Line`, `Title`, `Issue`.
   - `Issue` is the problem in at most two sentences — what is wrong and where it bites. The reviewer judges the problem first; the fix and rationale are written at approval.
   - Verify each `Line` against `python scripts/diff_lines.py <workspace_path> <file>` before writing it.

@@ -1,36 +1,34 @@
 # Kickoff
 
-Turn the epic into an approved spec and a set of tickets, then stop. Build on
-whatever the workspace already holds, such as a spec from an interrupted kickoff.
+Turn the epic detail into an approved story: **what** to deliver and **why**,
+then stop. The how belongs to the design stage, in a fresh session.
+
+- **Start**
+  - On a new epic, write `state.json` with `kickoff` `in_progress`, `design`
+    and `close` `todo`, and empty `tickets` and `issues`, and start
+    `progress.md` with its three headings. On a resume, build on what the
+    workspace holds, such as a draft `story.md`.
 
 - **Explore**
-  - Understand the code the epic touches, starting from the user's context and
-    widening only as needed. Done when you can say what exists and what the
-    epic affects, without guessing.
+  - Read the user's context (docs, tickets, designs), and the code only where
+    it leaves a gap about today's behaviour. Done when you can say, in user
+    terms, what users see today and what the epic changes.
 
 - **Grill**
-  - Run the `grilling` skill on the epic detail until the background, outcome
-    and epic-level DoD are unambiguous. Unknowns that can't be resolved now stay
-    as open unknowns: fog of war, so plan only as far as you can see.
+  - Run the `grilling` skill on the epic detail until the problem,
+    deliverables, acceptance criteria (ACs), out of scope and behaviour
+    decisions are unambiguous. Technical questions wait for design.
 
-- **Spec**
-  - Write `spec.md` from [`spec_template.md`](spec_template.md). Done when a
-    fresh session could pick any ticket and see why it exists. **Approval
-    required.**
+- **Story**
+  - Write `story.md` using the `va-sdlc-template` skill (story), with these
+    epic changes:
+    - INVEST's *Small* does not apply: an epic story is large, and design
+      splits it into tickets.
+    - Add a `Decisions` section after `Out of Scope`: each behaviour or domain
+      choice, with its reason.
+  - Done when every deliverable has an AC and every open question is resolved.
+    **Approval required.**
 
-- **Split**
-  - Propose the tickets as a table of title, type, blocked by and what it
-    delivers. Each ticket is a tracer bullet that fits one session. A POC or
-    research ticket stands in for each open unknown that blocks planning
-    further. Done when every DoD item in the spec is covered by a ticket or an
-    open unknown. Iterate with the user on granularity and blockers. **Approval
-    required.**
-
-- **Create**
-  - Write the tickets from [`ticket_template.md`](ticket_template.md) and
-    `state.json` with every ticket `todo`; ask the user for the epic branch if
-    there is one. Start `progress.md`, with a first handoff only if kickoff left
-    something the spec and tickets don't carry. Write the session retro in
-    `kickoff/retro.md` with [`va-retro`](../../va-retro/SKILL.md), if the session
-    had friction. Done when every ticket has its file and `state.json` lists
-    them.
+- **Wrap up**
+  - Set `kickoff` `done`, and add a line to `progress.md` only if kickoff left
+    something the story doesn't carry. Write the session retro.
